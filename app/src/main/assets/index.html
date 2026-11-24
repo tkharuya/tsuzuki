@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f7f5ef">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <title>つづき 1.12.2 — 小説リーダー</title>
+  <link rel="stylesheet" href="app.css">
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <div id="preview-label" hidden>UI確認用 · 実サイトには接続していません</div>
+  <div id="offline-label" hidden>オフライン · 保存した話を読めます</div>
+  <main id="app"><div class="boot"><span class="spinner"></span><p>本棚を開いています</p></div></main>
+  <div id="chatgpt-welcome-host" hidden></div>
+  <div id="speech-player-host" hidden aria-label="読み上げプレーヤー"></div>
+  <div id="sheet-host"></div>
+  <div id="toast-host" aria-live="polite" aria-atomic="true"></div>
+  <div id="busy-overlay" hidden><div class="busy-card"><span class="spinner"></span><span id="busy-message">読み込んでいます</span></div></div>
+</body>
+</html>
