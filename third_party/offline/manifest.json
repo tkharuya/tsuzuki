@@ -1,0 +1,132 @@
+{
+  "version": "voicevox-0.17.1-v1",
+  "engineVersion": "0.17.1",
+  "runtimeVersion": "1.23.2",
+  "files": [
+    {
+      "name": "open_jtalk_dic_utf_8-1.11.tar.gz",
+      "url": "https://github.com/r9y9/open_jtalk/releases/download/v1.11.1/open_jtalk_dic_utf_8-1.11.tar.gz",
+      "bytes": 23646843,
+      "sha256": "fe6ba0e43542cef98339abdffd903e062008ea170b04e7e2a35da805902f382a",
+      "note": "URL follows official VOICEVOX CORE 0.17.1 downloader; SHA256 calculated locally from release archive (asset does not publish a digest).",
+      "extractedBytes": 107304813
+    },
+    {
+      "name": "0.vvm",
+      "url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.17.1/0.vvm",
+      "bytes": 59308488,
+      "sha256": "ecd35374d4182cd883cba5040376f7f888cc6ba248b1c2f4cea07cdb34bb1318"
+    },
+    {
+      "name": "1.vvm",
+      "url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.17.1/1.vvm",
+      "bytes": 60571189,
+      "sha256": "e16ffb6fc3e13e1be4ebc3831cc39df019cbac96b28bbed7653a4bb51c4d7d5d"
+    },
+    {
+      "name": "2.vvm",
+      "url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.17.1/2.vvm",
+      "bytes": 59308683,
+      "sha256": "2eb9a67e3bce09a7f209eb21a56926fa94476352b6ce874c9acd8f465871a4f4"
+    },
+    {
+      "name": "4.vvm",
+      "url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.17.1/4.vvm",
+      "bytes": 59304904,
+      "sha256": "716d2900f6b93ba22119af0e236c32fdbf6fea81c519b5d4830afcb2db349522"
+    },
+    {
+      "name": "5.vvm",
+      "url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.17.1/5.vvm",
+      "bytes": 57611312,
+      "sha256": "67451cdbc3e473dba4d09c878903a656be9e7030cb5901155e5a51634ed8b318"
+    },
+    {
+      "name": "9.vvm",
+      "url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.17.1/9.vvm",
+      "bytes": 58328935,
+      "sha256": "3dca586c0aa553772419bdc090045f9ea73bd9ed82b88b7dd5737bdd6eddee29"
+    },
+    {
+      "name": "10.vvm",
+      "url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.17.1/10.vvm",
+      "bytes": 58327087,
+      "sha256": "dea2104b05391fdc37d8c27b4104569d5bff3a52bcb9e4077bb2b1f951c7524a"
+    },
+    {
+      "name": "11.vvm",
+      "url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.17.1/11.vvm",
+      "bytes": 61687324,
+      "sha256": "3fb0c0f12ec37fda568020509d6e63a0a6b5d6edf3c2330508c6bf4e3eeb8b82"
+    },
+    {
+      "name": "15.vvm",
+      "url": "https://github.com/VOICEVOX/voicevox_vvm/releases/download/0.17.1/15.vvm",
+      "bytes": 67265793,
+      "sha256": "c29b0c0f8e332fcedc2a5de4b4426feb75fc9f587c314da99af8dbc964287221"
+    }
+  ],
+  "supportedStyles": {
+    "0.vvm": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      10
+    ],
+    "1.vvm": [
+      14
+    ],
+    "2.vvm": [
+      15,
+      16,
+      17,
+      18
+    ],
+    "4.vvm": [
+      11
+    ],
+    "5.vvm": [
+      19,
+      22,
+      36,
+      37,
+      38
+    ],
+    "9.vvm": [
+      12,
+      32,
+      33,
+      34,
+      35
+    ],
+    "10.vvm": [
+      39,
+      40,
+      41
+    ],
+    "11.vvm": [
+      43,
+      44,
+      45
+    ],
+    "15.vvm": [
+      13,
+      75,
+      76,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86
+    ]
+  },
+  "voiceCount": 10,
+  "downloadBytes": 565360558
+}

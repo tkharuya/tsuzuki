@@ -1,0 +1,60 @@
+{
+  "nativeDependencies": [
+    {
+      "file": "third_party/offline/voicevoxcore-android-0.17.1.aar",
+      "bytes": 4036225,
+      "sha256": "672bdf2dac5c426f7137dc0b15f731e32c813fb6c4c77dc9a7a246198549ad29",
+      "sourceArchiveUrl": "https://github.com/VOICEVOX/voicevox_core/releases/download/0.17.1/java_packages.zip",
+      "sourceArchiveSha256": "d30d4d3ab782f033c246285e2c46253633837c69d8a8d0b376cc3f85d6fcc7a1"
+    },
+    {
+      "file": "third_party/offline/libs/voicevox-core-0.17.1.jar",
+      "bytes": 57476,
+      "sha256": "2ef706548f2c0448018c41b7375a7dfd17a4cabbb9f46d19d0c851a8b4d1017b",
+      "sourceArchiveUrl": "https://github.com/VOICEVOX/voicevox_core/releases/download/0.17.1/java_packages.zip",
+      "sourceArchiveSha256": "d30d4d3ab782f033c246285e2c46253633837c69d8a8d0b376cc3f85d6fcc7a1"
+    },
+    {
+      "file": "app/src/main/jniLibs/arm64-v8a/libc++_shared.so",
+      "bytes": 1794776,
+      "sha256": "d523468d62d9b603cb3354294d70d4b2feabf2c3f1e43b0c96c9aabf32813708",
+      "sourceArchiveUrl": "https://github.com/VOICEVOX/voicevox_core/releases/download/0.17.1/java_packages.zip",
+      "sourceArchiveSha256": "d30d4d3ab782f033c246285e2c46253633837c69d8a8d0b376cc3f85d6fcc7a1"
+    },
+    {
+      "file": "app/src/main/jniLibs/arm64-v8a/libvoicevox_core_java_api.so",
+      "bytes": 3632560,
+      "sha256": "7d96efec5e1c5ef1404d83c96201139b1db03f87f232a111558187d188b4c81d",
+      "sourceArchiveUrl": "https://github.com/VOICEVOX/voicevox_core/releases/download/0.17.1/java_packages.zip",
+      "sourceArchiveSha256": "d30d4d3ab782f033c246285e2c46253633837c69d8a8d0b376cc3f85d6fcc7a1"
+    },
+    {
+      "file": "app/src/main/jniLibs/arm64-v8a/libvoicevox_onnxruntime.so",
+      "bytes": 18709176,
+      "sha256": "b5380b9d310bbd1f46b20b1406d6a5a030ff5f36a45964481af8af5a54c4e4a5",
+      "sourceArchiveUrl": "https://github.com/VOICEVOX/onnxruntime-builder/releases/download/voicevox_onnxruntime-1.23.2/voicevox_onnxruntime-android-arm64-1.23.2.tgz",
+      "sourceArchiveSha256": "43e6fc2a89ea6412d4cc20215042a3b34da22fdf05c1bb76256a686f82378d46"
+    },
+    {
+      "file": "app/src/main/jniLibs/x86_64/libc++_shared.so",
+      "bytes": 1617608,
+      "sha256": "3d8817f3a50515665b9152c620dedfd8509f84b68307f5f7ef20a75d9ae08f69",
+      "sourceArchiveUrl": "https://github.com/VOICEVOX/voicevox_core/releases/download/0.17.1/java_packages.zip",
+      "sourceArchiveSha256": "d30d4d3ab782f033c246285e2c46253633837c69d8a8d0b376cc3f85d6fcc7a1"
+    },
+    {
+      "file": "app/src/main/jniLibs/x86_64/libvoicevox_core_java_api.so",
+      "bytes": 4142112,
+      "sha256": "098c6c7c11efc74e71d7801d9574952c43a15cebe0dcb44576cf2c3de5f702d4",
+      "sourceArchiveUrl": "https://github.com/VOICEVOX/voicevox_core/releases/download/0.17.1/java_packages.zip",
+      "sourceArchiveSha256": "d30d4d3ab782f033c246285e2c46253633837c69d8a8d0b376cc3f85d6fcc7a1"
+    },
+    {
+      "file": "app/src/main/jniLibs/x86_64/libvoicevox_onnxruntime.so",
+      "bytes": 20679072,
+      "sha256": "398db8c38855e27b93cb9735597a83946ca38345c68ecc71db58b2b11f41bf1e",
+      "sourceArchiveUrl": "https://github.com/VOICEVOX/onnxruntime-builder/releases/download/voicevox_onnxruntime-1.23.2/voicevox_onnxruntime-android-x64-1.23.2.tgz",
+      "sourceArchiveSha256": "807e2ea50dfb2a309416adb1cee6edc53d3d8eae1d702ad4e6f199a0f91f2d24"
+    }
+  ]
+}
