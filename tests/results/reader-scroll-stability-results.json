@@ -1,0 +1,51 @@
+{
+  "status": "passed",
+  "browser": "131.0.6778.204",
+  "nativeMock": true,
+  "checks": [
+    {
+      "width": 393,
+      "joined": {
+        "duringTouch": false,
+        "quietMs": 181,
+        "rowDeltaPx": 0,
+        "loaded": 5
+      },
+      "edges": {
+        "statusGap": 24,
+        "navGap": 24,
+        "maxBottomDriftPx": 0,
+        "sameRange": true
+      },
+      "frames": 83,
+      "scrollSpanPx": 439,
+      "maxExtraLineDisplacementPx": 0,
+      "applicationScrollWrites": 0,
+      "largestApplicationWritePx": 0,
+      "chromeToggled": true,
+      "errors": []
+    },
+    {
+      "width": 720,
+      "joined": {
+        "duringTouch": false,
+        "quietMs": 181,
+        "rowDeltaPx": 0,
+        "loaded": 6
+      },
+      "edges": {
+        "statusGap": 24,
+        "navGap": 24,
+        "maxBottomDriftPx": 0,
+        "sameRange": true
+      },
+      "frames": 83,
+      "scrollSpanPx": 448,
+      "maxExtraLineDisplacementPx": 0,
+      "applicationScrollWrites": 0,
+      "largestApplicationWritePx": 0,
+      "chromeToggled": true,
+      "errors": []
+    }
+  ]
+}

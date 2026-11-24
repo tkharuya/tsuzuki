@@ -1,0 +1,10 @@
+{
+  "legacyDetailedRequests": 62,
+  "liveGptTested": false,
+  "accuracyMeasured": false,
+  "fixtureUnits": 241,
+  "wallClockSpeedupMeasured": false,
+  "chapterWorkflowRequests": 1,
+  "measurement": "synthetic transport request counters",
+  "status": "passed"
+}
