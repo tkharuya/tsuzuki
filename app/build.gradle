@@ -1,0 +1,56 @@
+plugins {
+    id 'com.android.application'
+}
+
+def appVersion = new Properties()
+rootProject.file('version.properties').withInputStream { appVersion.load(it) }
+
+android {
+    namespace 'jp.haruyalab.novelshelf'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'jp.haruyalab.novelshelf'
+        minSdk 26
+        targetSdk 36
+        versionCode appVersion.getProperty('VERSION_CODE').toInteger()
+        versionName appVersion.getProperty('VERSION_NAME')
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+
+    def signingPath = rootProject.file('.signing/novelshelf-release.p12')
+    def passwordPath = rootProject.file('.signing/password.txt')
+    if (signingPath.exists() && passwordPath.exists()) {
+        signingConfigs {
+            personal {
+                storeFile signingPath
+                storePassword passwordPath.text.trim()
+                keyAlias 'novelshelf'
+                keyPassword passwordPath.text.trim()
+                storeType 'PKCS12'
+            }
+        }
+        buildTypes {
+            release {
+                signingConfig signingConfigs.personal
+                minifyEnabled false
+            }
+        }
+    }
+}
+
+// Pinned official VOICEVOX Java API and its runtime dependencies.
+// Native libraries are packaged from src/main/jniLibs.
+dependencies {
+    implementation fileTree(dir: '../third_party/offline/libs', include: ['*.jar'])
+}
