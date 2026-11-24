@@ -1,0 +1,81 @@
+// Browser/Native bridge regressions only. No actual model download, inference or GPT request.
+const fs=require('fs'),path=require('path'),assert=require('assert').strict;
+const {initializeNativeMock}=require('./ui-native-mock.cjs');
+let playwright;try{playwright=require('playwright');}catch(_){playwright=require(path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES||'','playwright'));}
+const root=path.resolve(__dirname,'..'),assets=path.join(root,'app/src/main/assets'),output=path.join(root,'build/qa'),origin='https://appassets.androidplatform.net';
+// Apply the actual Android response header as well as index.html's meta policy.
+// A stricter native header can otherwise make an in-browser license fetch pass incorrectly.
+const nativeSource=fs.readFileSync(path.join(root,'app/src/main/java/jp/haruyalab/novelshelf/MainActivity.java'),'utf8');
+const nativeCsp=nativeSource.match(/headers\.put\("Content-Security-Policy","([^"]+)"\)/)[1];
+fs.mkdirSync(output,{recursive:true});const checks=[];let browser;
+const check=(name,ok,detail='')=>{assert.ok(ok,name+(detail?': '+detail:''));checks.push({name,ok:true});};
+async function setup(){
+ const context=await browser.newContext({viewport:{width:360,height:900},deviceScaleFactor:1,isMobile:true,hasTouch:true,reducedMotion:'reduce'}),errors=[],requests=[];
+ await context.addInitScript(initializeNativeMock,{offlinePacks:{status:'not_installed',ready:false,downloadedBytes:0,totalBytes:565360558,requiredFreeBytes:800000000,installedBytes:649018528}});
+ await context.route('**/*',async route=>{const u=new URL(route.request().url());requests.push(u.href);if(u.origin!==origin||!/^\/assets\/[a-zA-Z0-9._-]+$/.test(u.pathname))return route.abort();const file=path.join(assets,path.basename(u.pathname));if(!fs.existsSync(file))return route.fulfill({status:404,body:'Not found'});return route.fulfill({status:200,body:fs.readFileSync(file),headers:{'Content-Security-Policy':nativeCsp,'X-Content-Type-Options':'nosniff'},contentType:file.endsWith('.html')?'text/html; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':file.endsWith('.txt')?'text/plain; charset=utf-8':'text/javascript; charset=utf-8'});});
+ const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});await page.goto(origin+'/assets/index.html');await page.locator('.book-card').first().waitFor();return{context,page,errors,requests};
+}
+const closeSheet=page=>page.locator('.sheet [data-action="close-sheet"]').click();
+const emit=(page,patch)=>page.evaluate(patch=>window.__offlinePacksEvent(patch),patch);
+async function run(){
+ browser=await playwright.chromium.launch({headless:true,executablePath:process.env.NOVELSHELF_CHROME,args:['--no-sandbox','--disable-dev-shm-usage']});
+ const {context,page,errors,requests}=await setup();
+ check('Opening the app never installs voices, analyzes text or synthesizes audio',await page.evaluate(()=>!window.__nativeCalls.some(r=>['speechOfflineInstall','speechAnalyze','speechControl'].includes(r.action))));
+ await page.locator('[data-action="nav"][data-view="settings"]').click();await page.locator('[data-action="speech-settings"]').click();
+ check('The default is offline character voice with independent ChatGPT account analysis',await page.locator('input[name="engine"][value="offline"]').isChecked()&&await page.locator('input[name="analysisProvider"][value="chatgpt"]').isChecked());
+ check('Removed cloud speech credentials, model and billing controls are absent',!/Gemini|Google AI Pro|Cloud Billing/.test(await page.locator('.sheet-content').innerText())&&await page.locator('#speech-gemini-key,input[name="geminiConsent"],#speech-voice-model').count()===0);
+ check('First install explains the download size, storage requirement and local synthesis',/565\.4 MB/.test(await page.locator('[data-offline-status]').innerText())&&/800/.test(await page.locator('[data-offline-status]').innerText())&&/端末内/.test(await page.locator('#offline-settings-heading').locator('..').innerText()));
+ check('Offline generation explains that GPT analysis still needs communication',/GPTの解析には通信が必要/.test(await page.locator('#offline-settings-heading').locator('..').innerText())&&/未解析の台詞も選んだ演技/.test(await page.locator('#offline-settings-heading').locator('..').innerText()));
+ check('Merely opening voice settings does not start model acquisition',await page.evaluate(()=>!window.__nativeCalls.some(r=>r.action==='speechOfflineInstall')));
+ await page.screenshot({path:path.join(output,'offline-first-install-mobile.png'),fullPage:true});
+ await page.locator('.offline-voice-library summary').click();
+ check('Ten named voices and their styles are offered before install',await page.locator('.offline-voice-card').count()===10&&await page.locator('.offline-voice-card h4').allTextContents().then(values=>new Set(values).size===10)&&await page.locator('.offline-voice-styles').count()===10);
+ check('Preview controls remain unavailable until voice data is ready',await page.locator('[data-action="speech-offline-preview"]:disabled').count()===10&&await page.evaluate(()=>!window.__nativeCalls.some(r=>r.action==='speechControl')));
+ await page.locator('input[name="engine"][value="device"]').check();await page.locator('#speech-default-offline').selectOption('sora');await page.locator('.api-key-alternative summary').click();await page.locator('input[name="analysisProvider"][value="api_key"]').check();await page.locator('#speech-api-key').fill('fixture-unsaved-gpt-key');await page.locator('#speech-analysis-model').fill('fixture-unsaved-model');
+ await page.locator('[data-action="speech-offline-install"]').click();await page.locator('[data-pack-state="downloading"]').waitFor();
+ check('Install begins only on explicit action and carries no text, key or settings',await page.evaluate(()=>{const calls=window.__nativeCalls.filter(r=>r.action==='speechOfflineInstall');return calls.length===1&&Object.keys(calls[0].payload).length===0&&!window.__nativeCalls.some(r=>r.action==='speechSettings'||r.action==='speechAnalyze');}));
+ await emit(page,{downloadedBytes:141340139,totalBytes:565360558});
+ check('Download progress shows real byte progress and a cancel action',await page.locator('progress').getAttribute('value')==='24'&&/141\.3 MB \/ 565\.4 MB/.test(await page.locator('[data-offline-status]').innerText())&&await page.locator('[data-action="speech-offline-cancel"]').count()===1);
+ check('Progress updates preserve all unsaved voice and GPT fields',await page.locator('input[name="engine"][value="device"]').isChecked()&&await page.locator('#speech-default-offline').inputValue()==='sora'&&await page.locator('#speech-api-key').inputValue()==='fixture-unsaved-gpt-key'&&await page.locator('#speech-analysis-model').inputValue()==='fixture-unsaved-model'&&await page.locator('.offline-voice-library').evaluate(el=>el.open));
+ await page.locator('[data-action="speech-offline-cancel"]').click();await page.locator('[data-pack-state="paused"]').waitFor();
+ check('Cancel exposes resumable partial data without claiming readiness',/続ける/.test(await page.locator('[data-action="speech-offline-install"]').innerText())&&/141\.3 MB/.test(await page.locator('[data-offline-status]').innerText())&&await page.locator('[data-action="speech-offline-preview"]:disabled').count()===10);
+ await page.locator('[data-action="speech-offline-install"]').click();await page.locator('[data-pack-state="downloading"]').waitFor();
+ check('Resume reuses the install route without resetting displayed completed bytes',await page.evaluate(()=>window.__nativeCalls.filter(r=>r.action==='speechOfflineInstall').length===2)&&/141\.3 MB/.test(await page.locator('[data-offline-status]').innerText()));
+ await emit(page,{status:'error',error:'通信が切れました。<img src=x onerror=alert(1)>',ready:false});
+ check('Install errors are visible, escaped and offer retry',/通信が切れました/.test(await page.locator('[data-offline-status] .download-error').innerText())&&await page.locator('[data-offline-status] img,[data-offline-status] script').count()===0&&/再試行/.test(await page.locator('[data-action="speech-offline-install"]').innerText()));
+ await page.locator('[data-action="speech-offline-install"]').click();await page.locator('[data-pack-state="downloading"]').waitFor();await emit(page,{status:'verifying',downloadedBytes:565360558,error:''});
+ check('Verification does not enable premature playback',/確認中/.test(await page.locator('[data-offline-status]').innerText())&&await page.locator('[data-action="speech-offline-preview"]:disabled').count()===10);
+ await emit(page,{status:'ready',ready:true});
+ check('Ready events enable all ten previews without resetting settings drafts',await page.locator('[data-action="speech-offline-preview"]:enabled').count()===10&&/オフラインで読み上げできます/.test(await page.locator('[data-offline-status]').innerText())&&await page.locator('#speech-api-key').inputValue()==='fixture-unsaved-gpt-key');
+ await page.locator('#speech-api-key').fill('');await page.locator('input[name="analysisProvider"][value="chatgpt"]').check();
+ const positions=await page.evaluate(()=>JSON.stringify(window.__mockState.speech.positions));
+ await page.locator('[data-action="speech-offline-preview"][data-voice="miko"]').click();await page.locator('[data-voice-preview-status]').waitFor({state:'visible'});
+ check('Catalog preview explicitly selects the chosen offline voice without a book or GPT key',await page.evaluate(()=>{const r=window.__nativeCalls.filter(r=>r.action==='speechControl').at(-1);return r.payload.command==='preview'&&r.payload.engine==='offline'&&r.payload.offlineVoice==='miko'&&!r.payload.bookId&&!window.__mockState.speech.settings.hasApiKey&&!window.__nativeCalls.some(r=>r.action==='speechAnalyze');}));
+ check('Catalog preview preserves playback position and unsaved engine selection',positions===await page.evaluate(()=>JSON.stringify(window.__mockState.speech.positions))&&await page.locator('input[name="engine"][value="device"]').isChecked());
+ check('Preview has an in-sheet stop control while the normal reader controller stays hidden',await page.locator('[data-voice-preview-status] [data-command="stop"]').isVisible()&&!await page.locator('#speech-player-host').isVisible());
+ await page.locator('[data-voice-preview-status] [data-command="stop"]').click();await page.locator('[data-voice-preview-status]').waitFor({state:'hidden'});
+ check('Stopping a catalog sample does not move the audiobook position',positions===await page.evaluate(()=>JSON.stringify(window.__mockState.speech.positions)));
+ await page.locator('input[name="engine"][value="offline"]').check();await page.locator('[data-form="speech-settings"] button[type="submit"]').click();await page.waitForTimeout(40);
+ check('Saving offline settings writes only local voice fields and leaves GPT credentials optional',await page.evaluate(()=>{const r=window.__nativeCalls.filter(r=>r.action==='speechSettings').at(-1);return r.payload.settings.engine==='offline'&&r.payload.settings.offlineDefaultVoice==='sora'&&r.payload.settings.speechProvider==='voicevox'&&!Object.hasOwn(r.payload,'apiKey')&&!Object.keys(r.payload.settings).some(k=>/gemini|speechModel/i.test(k));}));
+ await page.locator('.offline-voice-library summary').click();await page.locator('.sheet-content').evaluate(el=>el.scrollTop+=document.querySelector('.offline-voice-library').getBoundingClientRect().top-el.getBoundingClientRect().top-15);await page.screenshot({path:path.join(output,'offline-voice-catalog-mobile.png'),fullPage:true});
+ for(const width of [360,412,720]){await page.setViewportSize({width,height:900});const size=await page.evaluate(()=>({width:innerWidth,root:document.documentElement.scrollWidth,sheet:document.querySelector('.sheet').scrollWidth,client:document.querySelector('.sheet').clientWidth}));check('Offline setup and ten voice cards fit a '+width+'px viewport',size.root<=size.width+1&&size.sheet<=size.client+1,JSON.stringify(size));}
+ await page.setViewportSize({width:360,height:900});await page.locator('[data-action="speech-licenses"]').click();await page.locator('.voice-license-text').waitFor();
+ check('Packaged voice credits and license text are readable without leaving the app',/VOICEVOX/.test(await page.locator('.voice-license-text').innerText())&&await page.locator('.voice-license-text').innerText().then(t=>t.length>10000)&&requests.some(url=>url===origin+'/assets/voice-licenses.txt'));
+ check('License text is rendered as escaped plain text, not active markup',await page.locator('.voice-license-text img,.voice-license-text script,.voice-license-text iframe').count()===0);
+ await page.locator('.sheet [data-action="speech-settings"]').click();await closeSheet(page);
+ await page.evaluate(()=>{const oldRequest=window.Native.request,oldResult=window.onNativeResult;let pending='';window.Native.request=raw=>{const req=JSON.parse(raw);if(req.action==='speechState')pending=req.id;oldRequest(raw);};window.onNativeResult=(id,ok,data)=>{if(id===pending){pending='';const stale=JSON.parse(JSON.stringify(data));stale.offlinePacks={...stale.offlinePacks,status:'downloading',ready:false,downloadedBytes:10};window.__offlinePacksEvent({status:'ready',ready:true});setTimeout(()=>oldResult(id,ok,stale),50);}else oldResult(id,ok,data);};});
+ await page.locator('[data-action="speech-settings"]').click();await page.locator('[data-form="speech-settings"]').waitFor();
+ check('A late settings snapshot cannot overwrite a newer model-ready event',await page.locator('[data-pack-state="ready"]').count()===1&&await page.locator('[data-pack-state="downloading"]').count()===0);
+ await closeSheet(page);await page.locator('[data-action="nav"][data-view="library"]').click();await page.locator('.book-open').first().click();await page.locator('.novel-paragraph').first().waitFor();await page.locator('[data-action="speech-open"]').click();await page.locator('[data-speech-panel]').waitFor();
+ check('Reader speech sheet describes local generation and keeps the controller opt-in',/端末上で音声を生成/.test(await page.locator('.sheet-content').innerText())&&await page.locator('[data-key="showSpeechPlayer"]').getAttribute('aria-checked')==='false');
+ await emit(page,{status:'paused',ready:false,downloadedBytes:100});await page.locator('[data-offline-required]').waitFor({state:'visible'});
+ check('If voice data becomes unavailable the reader shows the install state immediately',await page.locator('[data-offline-required] [data-pack-state="paused"]').isVisible());
+ await page.locator('.sheet [data-action="speech-start"][data-from="start"]').click();await page.waitForTimeout(40);
+ check('Missing model data surfaces the native error and does not silently use another voice engine',/音声データ/.test(await page.locator('#toast-host').innerText())&&await page.evaluate(()=>window.__mockState.speech.playback.status==='idle'&&window.__mockState.speech.settings.engine==='offline'));
+ await emit(page,{status:'ready',ready:true,downloadedBytes:565360558});await page.locator('[data-offline-required]').waitFor({state:'hidden'});await page.locator('.sheet [data-action="speech-start"][data-from="start"]').click();await page.waitForFunction(()=>window.__mockState.speech.playback.status==='playing');
+ check('Unanalyzed saved text reaches offline playback without requiring ChatGPT login',await page.evaluate(()=>window.__mockState.speech.playback.engine==='offline'&&!window.__nativeCalls.some(r=>r.action==='speechAnalyze')));
+ check('Offline UI tests have no script errors or CSP violations',errors.length===0,errors.join('\n'));
+ check('All browser requests stay within the packaged app origin',requests.every(url=>url.startsWith(origin)));
+ await context.close();fs.writeFileSync(path.join(output,'offline-voice-ui-results.json'),JSON.stringify({status:'passed',browser:browser.version(),nativeMock:true,actualDownloadTested:false,localInferenceTested:false,checks},null,2));console.log(JSON.stringify({status:'passed',checks:checks.length,output},null,2));
+}
+run().catch(error=>{fs.writeFileSync(path.join(output,'offline-voice-ui-results.json'),JSON.stringify({status:'failed',nativeMock:true,checks,error:error.stack},null,2));console.error(error.stack);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();});

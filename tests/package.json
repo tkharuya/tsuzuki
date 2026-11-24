@@ -1,0 +1,29 @@
+{
+  "name": "tsuzuki-extractor-tests",
+  "private": true,
+  "version": "1.12.2",
+  "description": "Synthetic extraction and local Native bridge UI checks; not bundled in the Android app.",
+  "scripts": {
+    "test": "node extractor-fixtures.test.cjs",
+    "test:dialogue-acting": "node dialogue-acting-ui.cjs",
+    "test:word-prosody": "node word-prosody-ui.cjs",
+    "test:ui": "node ui-smoke.cjs",
+    "test:speech-ui": "node speech-ui-smoke.cjs",
+    "test:cast-offline-ui": "node cast-offline-ui.cjs",
+    "test:chatgpt-ui": "node chatgpt-login-ui.cjs",
+    "test:diagnostics-ui": "node response-diagnostics-ui.cjs",
+    "test:range-ui": "node speech-range-ui.cjs",
+    "test:offline-ui": "node offline-voice-ui.cjs",
+    "test:reader-scroll": "node reader-scroll-stability.cjs",
+    "test:reader-display-ui": "node reader-display-ui.cjs",
+    "test:acting-ui": "node acting-ui.cjs",
+    "test:chapter-memory-ui": "node chapter-memory-ui.cjs",
+    "test:activity-ui": "node analysis-activity-ui.cjs",
+    "test:pronunciation-ui": "node pronunciation-ui.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0",
+    "linkedom": "0.18.12",
+    "playwright": "1.62.1"
+  }
+}

@@ -1,0 +1,122 @@
+// Synthetic Native bridge checks. No live voice or model requests are made.
+const fs=require('fs');
+const path=require('path');
+const assert=require('assert').strict;
+const {initializeNativeMock}=require('./ui-native-mock.cjs');
+let playwright;try{playwright=require('playwright');}catch(_){playwright=require(path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES||'','playwright'));}
+const root=path.resolve(__dirname,'..'),assets=path.join(root,'app/src/main/assets'),output=path.join(root,'build/qa'),origin='https://appassets.androidplatform.net';
+fs.mkdirSync(output,{recursive:true});
+const results=[];let browser;
+function check(name,ok,detail=''){assert.ok(ok,name+(detail?': '+detail:''));results.push({name,ok:true});}
+async function setup(width=360){
+ const context=await browser.newContext({viewport:{width,height:900},deviceScaleFactor:1,isMobile:true,hasTouch:true,reducedMotion:'reduce'}),errors=[],requests=[];
+ await context.addInitScript(initializeNativeMock,{speechUnits:725,speechEngine:'device',staleSpeechReplies:true,showSpeechPlayer:true,autoFullscreen:false});
+ await context.route('**/*',async route=>{
+  const u=new URL(route.request().url());requests.push(u.href);
+  if(u.origin!==origin||!/^\/assets\/[a-zA-Z0-9._-]+$/.test(u.pathname))return route.abort();
+  const f=path.join(assets,path.basename(u.pathname));if(!fs.existsSync(f))return route.fulfill({status:404,body:'Not found'});
+  return route.fulfill({status:200,body:fs.readFileSync(f),contentType:/.html$/.test(f)?'text/html; charset=utf-8':/.css$/.test(f)?'text/css; charset=utf-8':'text/javascript; charset=utf-8'});
+ });
+ const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});await page.goto(origin+'/assets/index.html');await page.locator('.book-card').first().waitFor();return{page,context,errors,requests};
+}
+async function closeSheet(page){await page.locator('.sheet [data-action="close-sheet"]').click();}
+async function run(){
+ browser=await playwright.chromium.launch({headless:true,executablePath:process.env.NOVELSHELF_CHROME,args:['--no-sandbox','--disable-dev-shm-usage']});
+ const {page,context,errors,requests}=await setup();
+ check('Launch does not prepare, analyze or synthesize speech',await page.evaluate(()=>!window.__nativeCalls.some(r=>['speechPrepare','speechAnalyze','speechControl'].includes(r.action))));
+ await page.locator('.book-open').first().click();await page.locator('.novel-paragraph').first().waitFor();await page.waitForTimeout(350);
+ await page.locator('[data-action="speech-open"]').click();await page.locator('[data-speech-panel]').waitFor();
+ check('Opening listen prepares the complete 725-unit plan without AI calls',await page.evaluate(()=>window.__nativeCalls.some(r=>r.action==='speechPrepare')&&!window.__nativeCalls.some(r=>r.action==='speechAnalyze'||r.action==='speechControl'))&&/725/.test(await page.locator('[data-speech-panel]').innerText()));
+ check('Native TTS is the visible default and needs no key',/端末音声/.test(await page.locator('[data-speech-panel]').innerText())&&await page.evaluate(()=>!window.__mockState.speech.settings.hasApiKey));
+ await page.locator('.sheet [data-action="speech-start"][data-from="resume"]').click();await page.locator('#speech-player-host').waitFor({state:'visible'});
+ check('Device speech starts through the native service command',await page.evaluate(()=>window.__mockState.speech.playback.status==='playing'&&window.__nativeCalls.some(r=>r.action==='speechControl'&&r.payload.command==='play')));
+ await page.locator('.sheet [data-action="speech-control"][data-command="pause"]').click();
+ await page.waitForFunction(()=>window.__mockState.speech.playback.status==='paused');
+ check('Pause shows device segment restart semantics',/現在の区間の先頭/.test(await page.locator('.sheet-content').innerText()));
+ await page.locator('.sheet [data-action="speech-control"][data-command="resume"]').click();await page.locator('.sheet [data-action="speech-control"][data-command="next"]').click();
+ await page.waitForFunction(()=>window.__mockState.speech.playback.unitIndex===1);
+ await page.locator('.sheet [data-action="speech-control"][data-command="previous"]').click();await page.waitForFunction(()=>window.__mockState.speech.playback.unitIndex===0);
+ check('Resume, next and previous use native playback controls',await page.evaluate(()=>['resume','next','previous'].every(c=>window.__nativeCalls.some(r=>r.action==='speechControl'&&r.payload.command===c))));
+ await page.locator('[data-speech-control="speed"]').selectOption('1.5');await page.waitForFunction(()=>window.__mockState.speech.playback.speed===1.5);
+ await page.locator('[data-speech-control="sleep"]').selectOption('15');await page.waitForFunction(()=>window.__mockState.speech.playback.sleepAt>Date.now());
+ check('Playback speed and sleep timer reach Native with numeric values',await page.evaluate(()=>window.__nativeCalls.some(r=>r.action==='speechControl'&&r.payload.command==='speed'&&r.payload.speed===1.5)&&window.__nativeCalls.some(r=>r.action==='speechControl'&&r.payload.command==='sleep'&&r.payload.minutes===15)));
+ await page.screenshot({path:path.join(output,'speech-reader-mobile.png'),fullPage:true});
+ await closeSheet(page);
+ const before=await page.evaluate(()=>window.__mockState.books.kakuyomu_fixture.position);
+ await page.evaluate(()=>{const p=window.__mockState.speech.playback;Object.assign(p,{paragraph:15,unitIndex:15,status:'playing'});window.onNativeEvent('speechState',JSON.parse(JSON.stringify(p)));});
+ await page.waitForTimeout(650);
+ check('Current spoken paragraph is highlighted',await page.locator('.novel-paragraph.is-speaking').count()===1&&await page.locator('.novel-paragraph.is-speaking').getAttribute('data-p-index')==='15');
+ check('Following spoken paragraphs preserves the separately saved reading bookmark',JSON.stringify(await page.evaluate(()=>window.__mockState.books.kakuyomu_fixture.position))===JSON.stringify(before));
+ await page.locator('.reader-top [data-action="reader-back"]').click();await page.locator('.book-card').first().waitFor();
+ check('Mini player persists while browsing the shelf',await page.locator('#speech-player-host').isVisible());
+ await page.locator('#speech-player-host [data-command="pause"]').click();await page.waitForFunction(()=>window.__mockState.speech.playback.status==='paused');
+ await page.locator('#speech-player-host [data-action="speech-open-player"]').click();await page.locator('[data-speech-panel]').waitFor();
+ await page.locator('[data-action="speech-units"]').click();await page.locator('.speech-unit-row').first().waitFor();
+ check('Large chapter editor paginates instead of truncating at 600 units',await page.locator('.speech-unit-row').count()===20&&/全 725区間/.test(await page.locator('.speech-unit-count').innerText()));
+ await page.locator('[data-form="speech-unit-filter"] input').fill('701');await page.locator('[data-form="speech-unit-filter"] button').click();await page.locator('.speech-unit-row[data-id="u700"]').waitFor();
+ check('An arbitrary unit after 600 remains searchable and editable',await page.locator('.speech-unit-row[data-id="u700"]').count()===1);
+ await page.locator('.speech-unit-row[data-id="u700"]').click();await page.locator('#unit-kind').selectOption('thought');await page.locator('#unit-speaker').selectOption('narrator');await page.locator('[data-form="speech-unit"] select[name="emotion"]').selectOption('whisper');await page.locator('[data-form="speech-unit"] input[name="intensity"]').fill('0.7');await page.locator('[data-form="speech-unit"] button[type="submit"]').click();
+ await page.waitForFunction(()=>Object.values(window.__mockState.speech.plans)[0].units[700].locked===true);
+ check('Unit correction preserves text and fixes speaker/kind/emotion locally',await page.evaluate(()=>{const u=Object.values(window.__mockState.speech.plans)[0].units[700];return u.kind==='thought'&&u.speakerId==='narrator'&&u.emotion==='whisper'&&u.intensity===.7&&u.text.endsWith('区間番号 701');}));
+ await page.locator('[data-action="speech-back"]').click();await page.locator('[data-action="speech-cast-list"]').click();await page.locator('[data-action="speech-cast-edit"][data-id="narrator"]').click();
+ await page.locator('#cast-name').fill('落ち着いた語り手');await page.locator('[data-form="speech-cast"] select[name="gender"]').selectOption('male');await page.locator('#cast-voice').selectOption('takehiro');await page.locator('#cast-style').fill('低めの声で落ち着いて読む');await page.locator('[data-form="speech-cast"] details summary').click();await page.locator('[data-action="speech-load-voices"]').click();await page.locator('#cast-device option[value="mock-ja-male"]').waitFor({state:'attached'});await page.locator('#cast-device').selectOption('mock-ja-male');await page.locator('[data-form="speech-cast"] input[name="pitch"]').fill('0.9');await page.locator('[data-form="speech-cast"] button[type="submit"]').click();
+ await page.waitForFunction(()=>window.__mockState.speech.cast.kakuyomu_fixture.find(c=>c.id==='narrator').manual===true);await page.locator('[data-form="speech-cast"]').waitFor({state:'detached'});
+ check('Book-scoped cast stores gender presentation, voice, style and manual lock',await page.evaluate(()=>{const c=window.__mockState.speech.cast.kakuyomu_fixture.find(c=>c.id==='narrator');return c.aliases.includes('語り')&&c.manual&&c.offlineVoice==='takehiro'&&c.voiceLocked&&c.profileLocked&&c.deviceVoice==='mock-ja-male'&&c.gender==='male'&&c.pitch===.9&&c.style==='低めの声で落ち着いて読む';}));
+ const fixedNarratorBeforeAddition=await page.evaluate(()=>JSON.stringify(window.__mockState.speech.cast.kakuyomu_fixture.find(c=>c.id==='narrator')));
+ await page.locator('[data-action="speech-cast-new"]').first().click();await page.locator('#cast-name').fill('確認用の登場人物');await page.locator('[data-form="speech-cast"] select[name="tier"]').selectOption('main');await page.locator('[data-form="speech-cast"] button[type="submit"]').click();
+ await page.waitForFunction(()=>window.__mockState.speech.cast.kakuyomu_fixture.some(c=>c.name==='確認用の登場人物'));
+ check('A new named character can be added independently of AI analysis',await page.evaluate(()=>window.__mockState.speech.cast.kakuyomu_fixture.some(c=>c.name==='確認用の登場人物'&&c.tier==='main'&&c.manual)));
+ check('Editing and adding a cast member sends only that one member through the bounded bridge',await page.evaluate(()=>window.__nativeCalls.filter(r=>r.action==='speechCast').every(r=>r.payload.cast.length===1)));
+ check('A partial cast save retains other people including their manual voice assignments',fixedNarratorBeforeAddition===await page.evaluate(()=>JSON.stringify(window.__mockState.speech.cast.kakuyomu_fixture.find(c=>c.id==='narrator')))&&await page.evaluate(()=>window.__mockState.speech.cast.kakuyomu_fixture.length===3&&window.__mockState.speech.cast.kakuyomu_fixture.some(c=>c.id==='unknown'))&&await page.locator('.speech-cast-row').count()===3);
+
+ await page.locator('[data-action="speech-back"]').click();await page.locator('.sheet [data-action="speech-settings"]').click();await page.locator('.api-key-alternative summary').click();await page.locator('input[name="analysisProvider"][value="api_key"]').check();await page.locator('#speech-api-key').waitFor();
+ check('GPT transfer disclosure is separate from local voice synthesis',/OpenAIへ送り/.test(await page.locator('#gpt-settings-heading').locator('..').innerText())&&/音声生成は端末内/.test(await page.locator('#offline-settings-heading').locator('..').innerText()));
+ check('Offline voice options come from the native catalog',await page.locator('#speech-default-offline option').count()===10&&await page.locator('#speech-default-offline option[value="metan"]').count()===1);
+ await page.locator('input[name="engine"][value="offline"]').check();await page.locator('#speech-api-key').fill('test-api-secret-never-persisted');await page.locator('[data-form="speech-settings"] button[type="submit"]').click();await page.waitForFunction(()=>window.__mockState.speech.settings.hasApiKey===true);
+ check('Offline synthesis has no second key or transmission consent',await page.evaluate(()=>window.__mockState.speech.settings.engine==='offline')&&await page.locator('input[name="geminiConsent"],#speech-gemini-key').count()===0);
+ check('Saving the GPT credential clears its input and never re-renders the key',await page.locator('#speech-api-key').inputValue()===''&&!await page.evaluate(()=>/test-api-secret-never-persisted/.test(document.documentElement.outerHTML+localStorage.getItem('tsuzuki-ui-test-state'))));
+ check('Saving AI settings alone does not submit novel text',await page.evaluate(()=>!window.__nativeCalls.some(r=>r.action==='speechAnalyze')));
+ await closeSheet(page);await page.locator('.book-open').first().click();await page.locator('.novel-paragraph').first().waitFor();await page.locator('[data-action="speech-open"]').click();await page.locator('[data-action="speech-analyze"]').click();await page.locator('[data-action="speech-analyze-confirm"]').waitFor();
+ check('Chapter analysis requires its explicit send-text action',await page.evaluate(()=>!window.__nativeCalls.some(r=>r.action==='speechAnalyze'))&&/この話の本文/.test(await page.locator('.sheet-description').innerText()));
+ await page.locator('[data-action="speech-analyze-confirm"]').click();await page.locator('[data-action="speech-cancel"]').waitFor();
+ check('Confirmed analysis passes the native consent flag and shows progress',await page.evaluate(()=>window.__nativeCalls.some(r=>r.action==='speechAnalyze'&&r.payload.confirmed===true))&&/0 \/ 725区間/.test(await page.locator('[data-analysis-status]').innerText()));
+ await page.evaluate(()=>{const [key,plan]=Object.entries(window.__mockState.speech.plans)[0];plan.analyzedUnits=640;plan.units.slice(0,640).forEach(u=>{u.analyzed=true;u.confidence=.42;});window.onNativeEvent('speechAnalysis',{bookId:key.split('|')[0],chapterUrl:plan.chapterUrl,plan:JSON.parse(JSON.stringify(plan)),cast:window.__mockState.speech.cast[key.split('|')[0]],status:'running'});});
+ await page.locator('[data-action="speech-cancel"]').click();await page.locator('[data-action="speech-analyze"]').waitFor();
+ check('Interrupted analysis beyond unit 600 remains resumable',/640 \/ 725区間/.test(await page.locator('[data-analysis-status]').innerText())&&/続きからGPT解析/.test(await page.locator('[data-action="speech-analyze"]').innerText()));
+ await page.locator('[data-action="speech-analyze"]').click();await page.locator('[data-action="speech-analyze-confirm"]').click();await page.locator('[data-action="speech-cancel"]').waitFor();
+ check('Resuming analysis preserves its prior progress and unit corrections',await page.evaluate(()=>{const p=Object.values(window.__mockState.speech.plans)[0];return p.analyzedUnits===640&&p.units[700].locked&&p.units[700].kind==='thought';}));
+ await page.locator('[data-action="speech-units"]').click();await page.locator('.speech-unit-row').first().waitFor();
+ check('AI confidence is visible when choosing a segment to correct',/話者のAI自己評価 42%/.test(await page.locator('.speech-unit-row').first().innerText()));
+ await page.evaluate(()=>{const [key,plan]=Object.entries(window.__mockState.speech.plans)[0];window.onNativeEvent('speechAnalysis',{bookId:key.split('|')[0],chapterUrl:plan.chapterUrl,invalidated:true,plan:{units:[{text:'STALE PLAN MUST NOT BE APPLIED'}]}});});
+ await page.locator('[data-action="speech-reload"]').waitFor();
+ check('A source-change event discards the stale analysis and offers a fresh prepare',!/STALE PLAN/.test(await page.locator('.sheet-content').innerText()));
+ await page.locator('[data-action="speech-reload"]').click();await page.locator('[data-speech-panel]').waitFor();
+ // Reader sheets keep the visible reading chapter; opening the mini player explicitly follows audio.
+ await page.evaluate(()=>{const st=window.__mockState,bookId='kakuyomu_fixture',plan=Object.values(st.speech.plans)[0];Object.assign(st.speech.playback,{bookId,chapterUrl:plan.chapterUrl,status:'paused',unitIndex:0,paragraph:0,unitCount:plan.units.length});window.onNativeEvent('speechState',JSON.parse(JSON.stringify(st.speech.playback)));});
+ await closeSheet(page);await page.locator('#speech-player-host [data-action="speech-open-player"]').click();await page.locator('[data-speech-panel]').waitFor();
+ await page.evaluate(()=>{const st=window.__mockState,bookId='kakuyomu_fixture',first=Object.values(st.speech.plans)[0],chapterUrl=st.chapters[bookId][1].url;const plan=JSON.parse(JSON.stringify(first));plan.chapterUrl=chapterUrl;plan.title='自動で移った次の話';plan.units[0].text='次の話の読み上げを確認する文章です。';st.speech.plans[bookId+'|'+chapterUrl]=plan;Object.assign(st.speech.playback,{bookId,chapterUrl,status:'playing',unitIndex:0,paragraph:0});st.speech.positions[bookId]={chapterUrl,unitIndex:0};window.onNativeEvent('speechState',JSON.parse(JSON.stringify(st.speech.playback)));});
+ await page.waitForFunction(()=>document.querySelector('.speech-current-text')?.textContent==='次の話の読み上げを確認する文章です。');
+ check('Automatic chapter continuation refreshes the explicitly opened mini-player sheet to its new chapter plan',await page.evaluate(()=>window.__nativeCalls.some(r=>r.action==='speechState'&&r.payload.chapterUrl===window.__mockState.chapters.kakuyomu_fixture[1].url)));
+ await page.locator('.sheet [data-action="speech-settings"]').click();await page.locator('[data-action="speech-delete-key"]').click();await page.waitForFunction(()=>window.__mockState.speech.settings.hasApiKey===false);
+ check('Removing the GPT key preserves the offline engine and installed voices',await page.evaluate(()=>window.__mockState.speech.settings.engine==='offline'&&window.__mockState.speech.offlinePacks.ready)&&await page.locator('#speech-api-key').inputValue()==='');
+ await closeSheet(page);await page.locator('[data-action="speech-open"]').click();await page.locator('[data-action="speech-start"][data-from="start"]').click();await page.waitForFunction(()=>window.__mockState.speech.playback.engine==='offline');
+ check('Offline playback is delegated to Native without a GPT key gate',await page.locator('#speech-player-host').isVisible()&&/キャラ音声/.test(await page.locator('#speech-player-host').innerText()));
+ check('Fresh native events win over a stale command-reply snapshot',await page.locator('.sheet [data-command="pause"]').count()===1);
+ await page.locator('[data-action="speech-cast-list"]').click();await page.locator('[data-action="speech-cast-edit"][data-id="narrator"]').click();
+ const speechPositionBefore=await page.evaluate(()=>JSON.stringify(window.__mockState.speech.positions));
+ await page.locator('[data-action="speech-preview"]').click();await page.waitForFunction(()=>window.__mockState.speech.playback.preview===true);
+ check('Saved cast preview uses a short sample without overwriting book playback position',await page.evaluate(()=>window.__nativeCalls.some(r=>r.action==='speechControl'&&r.payload.command==='preview'&&r.payload.speakerId==='narrator'))&&speechPositionBefore===await page.evaluate(()=>JSON.stringify(window.__mockState.speech.positions)));
+ check('Preview is clearly labelled and can be stopped',/声の試聴/.test(await page.locator('#speech-player-host').innerText())&&await page.locator('#speech-player-host [data-command="stop"]').count()===1);
+ await page.evaluate(()=>window.onNativeEvent('speechState',{...window.__mockState.speech.playback,status:'error',error:'試聴の音声を生成できません。音声データの状態を確認してください。'}));
+ check('Native synthesis and service failures surface a useful message even during preview',/音声データの状態/.test(await page.locator('#toast-host').innerText()));
+ await closeSheet(page);await page.locator('#speech-player-host [data-command="stop"]').click();await page.waitForFunction(()=>window.__mockState.speech.playback.status==='idle');
+ await page.locator('[data-action="nav"][data-view="settings"]').click();await page.locator('[data-action="speech-settings"]').click();await page.locator('#speech-api-key').waitFor();
+ const size=await page.evaluate(()=>({w:innerWidth,s:document.documentElement.scrollWidth,sheet:document.querySelector('.sheet').scrollWidth,client:document.querySelector('.sheet').clientWidth}));
+ check('Speech settings and mini player fit a 360px phone',size.s<=size.w+1&&size.sheet<=size.client+1,JSON.stringify(size));
+ await page.screenshot({path:path.join(output,'speech-settings-mobile.png'),fullPage:true});
+ check('Speech UI has no script errors or CSP violations',errors.length===0,errors.join('\n'));
+ check('Synthetic tests make no external network request',requests.every(u=>u.startsWith(origin)));
+ await context.close();
+ fs.writeFileSync(path.join(output,'speech-ui-results.json'),JSON.stringify({status:'passed',browser:browser.version(),nativeMock:true,liveVoiceTested:false,checks:results},null,2));console.log(JSON.stringify({status:'passed',checks:results.length,output},null,2));
+}
+run().catch(e=>{fs.writeFileSync(path.join(output,'speech-ui-results.json'),JSON.stringify({status:'failed',nativeMock:true,checks:results,error:e.stack},null,2));console.error(e.stack);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();});
