@@ -1,0 +1,16 @@
+Java dependencies bundled with VOICEVOX CORE
+
+Gson 2.10.1 — Copyright Google Inc. — Apache License 2.0
+https://github.com/google/gson
+Kotlin standard library 1.9.10 — Copyright JetBrains s.r.o. — Apache License 2.0
+https://github.com/JetBrains/kotlin
+JetBrains annotations 13.0 — Copyright JetBrains s.r.o. — Apache License 2.0
+https://github.com/JetBrains/java-annotations
+Jakarta Validation API 3.0.2 — Apache License 2.0
+https://github.com/jakartaee/validation
+Jakarta Annotation API 2.1.1 — Eclipse Public License 2.0 / GNU GPL v2 with Classpath Exception
+See bundled jakarta.annotation-api-2.1.1-LICENSE.md and NOTICE.md.
+https://github.com/jakartaee/common-annotations-api
+
+Exact Maven coordinates, source locations and binary SHA-256 values are recorded in ../dependencies.json.
+The original Maven POMs are retained with these notices.
