@@ -1,0 +1,10 @@
+.gradle/
+.idea/
+local.properties
+.local-build.env
+.signing/
+build/
+app/build/
+node_modules/
+*.apk
+*.iml
